@@ -13,14 +13,17 @@ chmod 700 "${SSH_DIR}"
 
 # --- Write private key (only if missing) ---
 if [[ ! -f "${KEY_FILE}" ]]; then
-  if [[ -z "${SECRET_SSH_PRIVATE_KEY:-}" ]]; then
-    echo "ERROR: SECRET_SSH_PRIVATE_KEY is not set and ${KEY_FILE} does not exist." >&2
+  if [[ -z "${SECRET_SSH_PRIVATE_KEY_B64:-}" ]]; then
+    echo "ERROR: SECRET_SSH_PRIVATE_KEY_B64 is not set and ${KEY_FILE} does not exist." >&2
     exit 1
   fi
 
-  # If the env var contains literal "\n" characters (common in some secret stores),
-  # convert them into real newlines. If it already has real newlines, this is harmless.
-  printf '%b' "${SECRET_SSH_PRIVATE_KEY}" > "${KEY_FILE}"
+  # Decode base64 -> key file
+  echo "${SECRET_SSH_PRIVATE_KEY_B64}" | base64 -d > "${KEY_FILE}"
+
+  # Strip CR if any (harmless if none)
+  tr -d '\r' < "${KEY_FILE}" > "${KEY_FILE}.tmp" && mv "${KEY_FILE}.tmp" "${KEY_FILE}"
+
   chmod 600 "${KEY_FILE}"
 fi
 
@@ -48,7 +51,7 @@ fi
 # --- Optional: prefer SSH when someone uses https GitHub remotes ---
 git config --global url."git@github.com:".insteadOf "https://github.com/" >/dev/null 2>&1 || true
 
-# --- Quick sanity check (doesn't leak key) ---
-ssh -o BatchMode=yes -T git@github.com 2>/dev/null || true
+# --- Validate key parses (won’t print it) ---
+ssh-keygen -l -f "${KEY_FILE}" >/dev/null
 
 echo "GitHub SSH setup complete."
